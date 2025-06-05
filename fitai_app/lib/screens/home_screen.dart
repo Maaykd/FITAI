@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../design_system/colors.dart';
 import '../design_system/typography.dart';
 import '../widgets/premium/glassmorphism_card.dart';
 import '../widgets/premium/workout_progress_ring.dart';
 import '../widgets/premium/animated_background.dart';
+import '../services/workout_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -50,6 +53,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     
     _fadeController.forward();
     _slideController.forward();
+
+    // Carregar dados do provider (quando estiver disponível)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final workoutProvider = Provider.of<WorkoutProvider>(context, listen: false);
+        // Apenas tenta carregar se os métodos existirem
+        if (workoutProvider.userStats == null) {
+          // workoutProvider.loadUserStats(); // Ativar quando método existir
+        }
+      } catch (e) {
+        // Provider ainda não configurado completamente
+        debugPrint('WorkoutProvider ainda não disponível: $e');
+      }
+    });
   }
 
   @override
@@ -96,103 +113,116 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildHeader() {
-    return GlassmorphismCard(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Consumer<WorkoutProvider>(
+      builder: (context, workoutProvider, child) {
+        final stats = workoutProvider.userStats;
+        return GlassmorphismCard(
+          padding: const EdgeInsets.all(24),
+          child: Row(
             children: [
-              Text(
-                'Olá, Atleta! 💪',
-                style: FitTypography.displayMedium.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Olá, Atleta! 💪',
+                    style: FitTypography.displayMedium.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    stats != null && stats.currentStreak > 0 
+                        ? 'Sequência de ${stats.currentStreak} dias! 🔥'
+                        : 'Pronto para dominar hoje?',
+                    style: FitTypography.bodyLarge.copyWith(
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Pronto para dominar hoje?',
-                style: FitTypography.bodyLarge.copyWith(
-                  color: Colors.white.withValues(alpha: 0.9),
+              const Spacer(),
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.2),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.person,
+                  color: Colors.white,
+                  size: 28,
                 ),
               ),
             ],
           ),
-          const Spacer(),
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.2),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 2,
-              ),
-            ),
-            child: const Icon(
-              Icons.person,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildProgressOverview() {
-    return GlassmorphismCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Progresso Hoje',
-            style: FitTypography.headingMedium.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+    return Consumer<WorkoutProvider>(
+      builder: (context, workoutProvider, child) {
+        final stats = workoutProvider.userStats;
+        
+        return GlassmorphismCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildProgressItem(
-                'Calorias',
-                '420',
-                '650',
-                0.65,
-                FitColors.energyOrange,
-                Icons.local_fire_department,
+              Text(
+                'Progresso Hoje',
+                style: FitTypography.headingMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              _buildProgressItem(
-                'Passos',
-                '8.2k',
-                '10k',
-                0.82,
-                FitColors.successGreen,
-                Icons.directions_walk,
-              ),
-              _buildProgressItem(
-                'Água',
-                '1.8L',
-                '2.5L',
-                0.72,
-                FitColors.neuralBlue,
-                Icons.water_drop,
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildProgressItem(
+                    'Treinos',
+                    '${stats?.totalWorkouts ?? 0}',
+                    'realizados',
+                    (stats?.totalWorkouts ?? 0) / 100.0,
+                    FitColors.energyOrange,
+                    Icons.fitness_center,
+                  ),
+                  _buildProgressItem(
+                    'Sequência',
+                    '${stats?.currentStreak ?? 0}',
+                    'dias',
+                    (stats?.currentStreak ?? 0) / 30.0,
+                    FitColors.energyOrange,
+                    Icons.local_fire_department,
+                  ),
+                  _buildProgressItem(
+                    'Tempo',
+                    _formatMinutes(stats?.totalMinutesExercised ?? 0),
+                    'exercitados',
+                    (stats?.totalMinutesExercised ?? 0) / 1000.0,
+                    FitColors.successGreen,
+                    Icons.timer,
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Widget _buildProgressItem(
     String label,
     String current,
-    String target,
+    String subtitle,
     double progress,
     Color color,
     IconData icon,
@@ -200,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       children: [
         WorkoutProgressRing(
-          progress: progress,
+          progress: progress.clamp(0.0, 1.0),
           size: 80,
           strokeWidth: 6,
           primaryColor: color,
@@ -226,7 +256,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ),
         Text(
-          'de $target',
+          subtitle,
           style: FitTypography.bodySmall.copyWith(
             color: Colors.white.withValues(alpha: 0.6),
           ),
@@ -471,11 +501,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Baseado no seu progresso, recomendo aumentar 5% na carga do supino e focar mais no descanso entre séries para maximizar ganhos.',
-                  style: FitTypography.bodyMedium.copyWith(
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
+                Consumer<WorkoutProvider>(
+                  builder: (context, workoutProvider, child) {
+                    final stats = workoutProvider.userStats;
+                    String recommendation = 'Baseado no seu progresso, recomendo aumentar 5% na carga do supino e focar mais no descanso entre séries para maximizar ganhos.';
+                    
+                    if (stats != null) {
+                      if (stats.currentStreak == 0) {
+                        recommendation = 'É hora de retomar! Comece com um treino leve hoje para reativar seu corpo e mente. A consistência é mais importante que a intensidade.';
+                      } else if (stats.currentStreak >= 7) {
+                        recommendation = 'Parabéns pela sequência! Considere um dia de descanso ativo ou alongamento para permitir que seu corpo se recupere adequadamente.';
+                      } else if (stats.totalWorkouts < 5) {
+                        recommendation = 'Você está começando bem! Foque na execução correta dos movimentos antes de aumentar cargas. A técnica é fundamental.';
+                      }
+                    }
+                    
+                    return Text(
+                      recommendation,
+                      style: FitTypography.bodyMedium.copyWith(
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -485,21 +532,261 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _startWorkout() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('WorkoutScreen será implementado...'),
-        backgroundColor: FitColors.energyOrange,
+  // MÉTODOS DE AÇÃO INTEGRADOS - VERSÃO CORRIGIDA
+
+  void _startWorkout() async {
+    // Mostrar loading elegante
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.2),
+                Colors.white.withValues(alpha: 0.1),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Preparando seu treino...',
+                style: FitTypography.bodyLarge.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Simular carregamento da IA
+    await Future.delayed(const Duration(milliseconds: 1500));
+    
+    if (mounted) {
+      Navigator.pop(context); // Fechar loading
+      
+      // Mostrar mensagem de sucesso
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.fitness_center, color: Colors.white),
+              SizedBox(width: 8),
+              Text('Treino carregado! Vamos começar! 💪'),
+            ],
+          ),
+          backgroundColor: FitColors.energyOrange,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      
+      // Navegar para tela de treino
+      context.push('/workout/treino-do-dia');
+    }
+  }
+
+  void _openAICoach() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          margin: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.2),
+                Colors.white.withValues(alpha: 0.1),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Ícone da IA
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: FitColors.neuralGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.psychology,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Título
+              Text(
+                'FitAI Coach 🤖',
+                style: FitTypography.headingMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // Descrição
+              Text(
+                'Seu personal trainer IA está evoluindo! Em breve teremos conversas inteligentes sobre fitness.',
+                style: FitTypography.bodyMedium.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              
+              // Funcionalidades futuras
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '💡 Em desenvolvimento:',
+                      style: FitTypography.bodyMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '🏋️ Treinos personalizados em tempo real\n📊 Análise avançada de progresso\n🍎 Dicas de nutrição inteligentes\n💬 Chat motivacional 24/7',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Botões
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'Fechar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Row(
+                              children: [
+                                Icon(Icons.rocket_launch, color: Colors.white),
+                                SizedBox(width: 8),
+                                Text('IA Coach chegando em breve! 🚀'),
+                              ],
+                            ),
+                            backgroundColor: const Color(0xFF6366F1),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6366F1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'Aguardar! 💪',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  void _openAICoach() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('IA Coach será implementado em breve...'),
-        backgroundColor: FitColors.neuralBlue,
-      ),
-    );
+  // HELPER METHODS
+
+  String _formatMinutes(int totalMinutes) {
+    if (totalMinutes < 60) {
+      return '${totalMinutes}min';
+    }
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    return '${hours}h ${minutes}min';
   }
 }
